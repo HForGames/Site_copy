@@ -3,28 +3,36 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import json
+import random
+import string
 
 with open("mimeType.json", "r") as f:
     mimetypes = json.load(f)
 
 
+def random_filename():
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(10))
+
+
 def download(filename, parsed_url, src):
     print("Downloading :", src)
     response = requests.get(src)
-    response.raise_for_status()
-    try :
+    if response.status_code == 404:
+        print("File not found")
+    try:
         extension = mimetypes[response.headers["Content-Type"].split(";")[0]]
     except KeyError:
         print("Mimetype not found")
         print("add the mimetype to mimeType.json")
         print("mime type :", response.headers["Content-Type"].split(";")[0])
         exit()
-    filename = filename.split(".")[0]
+    filename = random_filename()
     directory = extension.split(".")[-1]
     if not os.path.isdir(f"./downloads/{parsed_url.netloc}/{directory}"):
         os.mkdir(f"./downloads/{parsed_url.netloc}/{directory}")
-    if os.path.exists(f"./downloads/{parsed_url.netloc}/{directory}/{filename}{extension}"):
-        filename = filename + "_1"
+    while os.path.isfile(f"./downloads/{parsed_url.netloc}/{directory}/{filename}{extension}"):
+        filename = random_filename()
     with open(f"./downloads/{parsed_url.netloc}/{directory}/{filename}{extension}", "wb") as f:
         f.write(response.content)
     return directory, extension, filename
@@ -81,6 +89,23 @@ def getting_link(soup, parsed_url, url):
     return soup
 
 
+def getting_meta(soup, parsed_url, url):
+    for meta in soup.find_all("meta"):
+        if meta.get("content") is None or meta.get("content").startswith("//") or meta.get("content") == url:
+            continue
+        content = meta.get("content")
+        if not content.startswith("http"):
+            content = f"{parsed_url.scheme}://{parsed_url.netloc}/{content}"
+        filename = content.split("?")[0].split("/")[-1]
+        directory, extension, filename = download(filename, parsed_url, content)
+        str_meta = str(meta)
+        start_index = str_meta.find("content=") + 8
+        new_meta = str_meta[:start_index] + f"{directory}/{filename}{extension}" + str_meta[
+                                                                                   str_meta.find('"', start_index):]
+        meta.replaceWith(BeautifulSoup(new_meta, 'html.parser'))
+    return soup
+
+
 def remove_all(parsed_url):
     for root, dirs, files in os.walk(f"./downloads/{parsed_url.netloc}/", topdown=False):
         for name in files:
@@ -112,6 +137,7 @@ def main(url):
     soup = getting_script(soup, parsed_url, url)
     soup = getting_link(soup, parsed_url, url)
     soup = getting_img(soup, parsed_url, url)
+    soup = getting_meta(soup, parsed_url, url)
     html = soup.prettify()
     with open(f"./downloads/{parsed_url.netloc}/index.html", "w") as f:
         f.write(html)

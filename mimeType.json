@@ -1,5 +1,6 @@
 {
   "text/javascript" : ".js",
+  "application/x-javascript" : ".js",
   "application/manifest+json" : "json",
   "application/opensearchdescription+xml" : ".xml",
   "application/vnd.lotus-1-2-3": ".123",
