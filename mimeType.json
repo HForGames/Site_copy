@@ -2,6 +2,7 @@
   "text/javascript" : ".js",
   "application/x-javascript" : ".js",
   "application/manifest+json" : "json",
+  "text/xml" : "xml",
   "application/opensearchdescription+xml" : ".xml",
   "application/vnd.lotus-1-2-3": ".123",
   "text/vnd.in3d.3dml": ".3dml",
