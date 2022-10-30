@@ -1,4 +1,6 @@
 {
+  "font/woff2" : ".woff2",
+  "image/webp" : ".webp",
   "text/javascript" : ".js",
   "application/x-javascript" : ".js",
   "application/manifest+json" : "json",

@@ -17,7 +17,7 @@ def random_filename():
 
 def download(filename, parsed_url, src):
     print("Downloading :", src)
-    response = requests.get(src)
+    response = requests.get(src, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36", "origin": f"{parsed_url.scheme}://{parsed_url.netloc}", "referer": f"{parsed_url.scheme}://{parsed_url.netloc}", "sec-fetch-dest": "empty", "sec-fetch-mode": "cors", "sec-fetch-site": "cross-site", "sec-gpc": "1", "upgrade-insecure-requests": "1", "cache-control": "max-age=0"})
     if response.status_code == 404:
         print("File not found")
     try:
@@ -27,15 +27,27 @@ def download(filename, parsed_url, src):
         print("add the mimetype to mimeType.json")
         print("mime type :", response.headers["Content-Type"].split(";")[0])
         exit()
-    filename = random_filename()
     directory = extension.split(".")[-1]
     if not os.path.isdir(f"./downloads/{parsed_url.netloc}/{directory}"):
         os.mkdir(f"./downloads/{parsed_url.netloc}/{directory}")
-    while os.path.isfile(f"./downloads/{parsed_url.netloc}/{directory}/{filename}{extension}"):
-        filename = random_filename()
+    text = response.content
     with open(f"./downloads/{parsed_url.netloc}/{directory}/{filename}{extension}", "wb") as f:
-        f.write(response.content)
+        f.write(text)
     return directory, extension, filename
+
+
+dict_of_type = {
+    "audio": "src",
+    "embed": "src",
+    "iframe": "src",
+    "img": "src",
+    "input": "src",
+    "object": "data",
+    "source": "src",
+    "track": "src",
+    "video": "src",
+    "link" : "href"
+}
 
 
 def getting_script(soup, parsed_url, url):
@@ -55,55 +67,17 @@ def getting_script(soup, parsed_url, url):
     return soup
 
 
-def getting_img(soup, parsed_url, url):
-    for img in soup.find_all("img"):
-        if img.get("src") is None or img.get("src").startswith("//") or img.get("src") == url:
-            continue
-        src = img.get("src")
-        if not src.startswith("http"):
-            src = f"{parsed_url.scheme}://{parsed_url.netloc}/{src}"
-        filename = src.split("?")[0].split("/")[-1]
-        directory, extension, filename = download(filename, parsed_url, src)
-        str_img = str(img)
-        start_index = str_img.find("src=") + 5
-        new_img = str_img[:start_index] + f"{directory}/{filename}{extension}" + str_img[
-                                                                                 str_img.find('"', start_index):]
-        img.replaceWith(BeautifulSoup(new_img, 'html.parser'))
-    return soup
-
-
-def getting_link(soup, parsed_url, url):
-    for link in soup.find_all("link"):
-        if link.get("href") is None or link.get("href").startswith("//") or link.get("href") == url:
-            continue
-        href = link.get("href")
-        if not href.startswith("http"):
-            href = f"{parsed_url.scheme}://{parsed_url.netloc}/{href}"
-        filename = href.split("?")[0].split("/")[-1]
-        directory, extension, filename = download(filename, parsed_url, href)
-        str_link = str(link)
-        start_index = str_link.find("href=") + 6
-        new_link = str_link[:start_index] + f"{directory}/{filename}{extension}" + str_link[
-                                                                                   str_link.find('"', start_index):]
-        link.replaceWith(BeautifulSoup(new_link, 'html.parser'))
-    return soup
-
-
-def getting_meta(soup, parsed_url, url):
-    for meta in soup.find_all("meta"):
-        if meta.get("content") is None or meta.get("content").startswith("//") or meta.get("content") == url:
-            continue
-        content = meta.get("content")
-        if not content.startswith("http"):
-            content = f"{parsed_url.scheme}://{parsed_url.netloc}/{content}"
-        filename = content.split("?")[0].split("/")[-1]
-        directory, extension, filename = download(filename, parsed_url, content)
-        str_meta = str(meta)
-        start_index = str_meta.find("content=") + 8
-        new_meta = str_meta[:start_index] + f"{directory}/{filename}{extension}" + str_meta[
-                                                                                   str_meta.find('"', start_index):]
-        meta.replaceWith(BeautifulSoup(new_meta, 'html.parser'))
-    return soup
+def getting_allBaliseWithPossibleLinks(soup):
+    return {"audio": [link for link in soup.find_all("audio")],
+            "embed": [link for link in soup.find_all("embed")],
+            "iframe": [link for link in soup.find_all("iframe")],
+            "img": [link for link in soup.find_all("img")],
+            "input": [link for link in soup.find_all("input")],
+            "object": [link for link in soup.find_all("object")],
+            "source": [link for link in soup.find_all("source")],
+            "track": [link for link in soup.find_all("track")],
+            "video": [link for link in soup.find_all("video")],
+            "link" : [link for link in soup.find_all("link")]}
 
 
 def remove_all(parsed_url):
@@ -132,13 +106,36 @@ def main(url):
             exit()
     response = requests.get(url)
     response.raise_for_status()
-    soup = BeautifulSoup(response.text, 'html.parser')
-    dict_to_download = {}
-    soup = getting_script(soup, parsed_url, url)
-    soup = getting_link(soup, parsed_url, url)
-    soup = getting_img(soup, parsed_url, url)
-    soup = getting_meta(soup, parsed_url, url)
-    html = soup.prettify()
+    index = response.text
+    soup = BeautifulSoup(index, 'html.parser')
+    list_of_balise = getting_allBaliseWithPossibleLinks(soup)
+    set_url = set()
+    for type in list_of_balise.keys():
+        for link in list_of_balise[type]:
+            set_url.add(link.get(dict_of_type[type]))
+    for link in set_url:
+        filename = ""
+        print("link :", link)
+        if link is None:
+            continue
+        if link.startswith("//"):
+            link = f"{parsed_url.scheme}:{link}"
+            filename = link.split("?")[0].split("/")[-1]
+        elif link.startswith("/"):
+            link = f"{parsed_url.scheme}://{parsed_url.netloc}{link}"
+            filename = link.split("?")[0].split("/")[-1]
+        elif link.startswith("http"):
+            filename = link.split("?")[0].split("/")[-1]
+        else:
+            link = f"{parsed_url.scheme}://{parsed_url.netloc}/{link}"
+            filename = link.split("?")[0].split("/")[-1]
+        if link == url or filename == "" or not link.startswith("http") or link.startswith("mailto") or link.startswith(
+                "tel"):
+            continue
+        filename = filename.split(".")[0]
+        directory, extension, filename = download(filename, parsed_url, link)
+        index = index.replace(link, f"{directory}/{filename}{extension}")
+    html = BeautifulSoup(index, 'html.parser').prettify()
     with open(f"./downloads/{parsed_url.netloc}/index.html", "w") as f:
         f.write(html)
 
