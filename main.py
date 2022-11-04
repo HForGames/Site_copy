@@ -104,6 +104,12 @@ def main(url):
         else:
             print("Folder not removed")
             exit()
+    parse_version = int(input("Choose between replacer\n"
+          "1 classic\n"
+          "2 flask\n"
+          ":"))
+    if parse_version !== 1 && parse_version !== 2:
+        exit()
     response = requests.get(url)
     response.raise_for_status()
     index = response.text
@@ -115,7 +121,7 @@ def main(url):
             set_url.add(link.get(dict_of_type[type]))
     for link in set_url:
         filename = ""
-        print("link :", link)
+        base_link = link
         if link is None:
             continue
         if link.startswith("//"):
@@ -134,7 +140,11 @@ def main(url):
             continue
         filename = filename.split(".")[0]
         directory, extension, filename = download(filename, parsed_url, link)
-        index = index.replace(link, f"{directory}/{filename}{extension}")
+        if parse_version == 1:
+            index = index.replace(base_link, f"{directory}/{filename}{extension}")
+        else:
+            index = index.replace(base_link, f"{{ url_for('static', filename='{directory}/{filename}{extension}') }}")
+        index = index.replace(base_link, f"{directory}/{filename}{extension}")
     html = BeautifulSoup(index, 'html.parser').prettify()
     with open(f"./downloads/{parsed_url.netloc}/index.html", "w") as f:
         f.write(html)
