@@ -50,7 +50,8 @@ dict_of_type = {
     "source": "src",
     "track": "src",
     "video": "src",
-    "link": "href"
+    "link": "href",
+    "script": "src"
 }
 
 
@@ -72,16 +73,7 @@ def getting_script(soup, parsed_url, url):
 
 
 def getting_allBaliseWithPossibleLinks(soup):
-    return {"audio": [link for link in soup.find_all("audio")],
-            "embed": [link for link in soup.find_all("embed")],
-            "iframe": [link for link in soup.find_all("iframe")],
-            "img": [link for link in soup.find_all("img")],
-            "input": [link for link in soup.find_all("input")],
-            "object": [link for link in soup.find_all("object")],
-            "source": [link for link in soup.find_all("source")],
-            "track": [link for link in soup.find_all("track")],
-            "video": [link for link in soup.find_all("video")],
-            "link": [link for link in soup.find_all("link")]}
+    return {balise: soup.find_all(balise) for balise in dict_of_type.keys()}
 
 
 def remove_all(parsed_url):
