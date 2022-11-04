@@ -17,7 +17,11 @@ def random_filename():
 
 def download(filename, parsed_url, src):
     print("Downloading :", src)
-    response = requests.get(src, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36", "origin": f"{parsed_url.scheme}://{parsed_url.netloc}", "referer": f"{parsed_url.scheme}://{parsed_url.netloc}", "sec-fetch-dest": "empty", "sec-fetch-mode": "cors", "sec-fetch-site": "cross-site", "sec-gpc": "1", "upgrade-insecure-requests": "1", "cache-control": "max-age=0"})
+    response = requests.get(src, headers={
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36",
+        "origin": f"{parsed_url.scheme}://{parsed_url.netloc}", "referer": f"{parsed_url.scheme}://{parsed_url.netloc}",
+        "sec-fetch-dest": "empty", "sec-fetch-mode": "cors", "sec-fetch-site": "cross-site", "sec-gpc": "1",
+        "upgrade-insecure-requests": "1", "cache-control": "max-age=0"})
     if response.status_code == 404:
         print("File not found")
     try:
@@ -46,7 +50,7 @@ dict_of_type = {
     "source": "src",
     "track": "src",
     "video": "src",
-    "link" : "href"
+    "link": "href"
 }
 
 
@@ -77,7 +81,7 @@ def getting_allBaliseWithPossibleLinks(soup):
             "source": [link for link in soup.find_all("source")],
             "track": [link for link in soup.find_all("track")],
             "video": [link for link in soup.find_all("video")],
-            "link" : [link for link in soup.find_all("link")]}
+            "link": [link for link in soup.find_all("link")]}
 
 
 def remove_all(parsed_url):
@@ -105,47 +109,53 @@ def main(url):
             print("Folder not removed")
             exit()
     parse_version = int(input("Choose between replacer\n"
-          "1 classic\n"
-          "2 flask\n"
-          ":"))
-    if parse_version !== 1 && parse_version !== 2:
+                              "1 classic\n"
+                              "2 flask\n"
+                              ": "))
+    if parse_version != 1 and parse_version != 2:
         exit()
     response = requests.get(url)
     response.raise_for_status()
     index = response.text
     soup = BeautifulSoup(index, 'html.parser')
     list_of_balise = getting_allBaliseWithPossibleLinks(soup)
-    set_url = set()
+    dict_of_url = {}
     for type in list_of_balise.keys():
-        for link in list_of_balise[type]:
-            set_url.add(link.get(dict_of_type[type]))
-    for link in set_url:
-        filename = ""
-        base_link = link
-        if link is None:
-            continue
-        if link.startswith("//"):
-            link = f"{parsed_url.scheme}:{link}"
-            filename = link.split("?")[0].split("/")[-1]
-        elif link.startswith("/"):
-            link = f"{parsed_url.scheme}://{parsed_url.netloc}{link}"
-            filename = link.split("?")[0].split("/")[-1]
-        elif link.startswith("http"):
-            filename = link.split("?")[0].split("/")[-1]
-        else:
-            link = f"{parsed_url.scheme}://{parsed_url.netloc}/{link}"
-            filename = link.split("?")[0].split("/")[-1]
-        if link == url or filename == "" or not link.startswith("http") or link.startswith("mailto") or link.startswith(
-                "tel"):
-            continue
-        filename = filename.split(".")[0]
-        directory, extension, filename = download(filename, parsed_url, link)
-        if parse_version == 1:
-            index = index.replace(base_link, f"{directory}/{filename}{extension}")
-        else:
-            index = index.replace(base_link, f"{{ url_for('static', filename='{directory}/{filename}{extension}') }}")
-        index = index.replace(base_link, f"{directory}/{filename}{extension}")
-    html = BeautifulSoup(index, 'html.parser').prettify()
+        for balise in list_of_balise[type]:
+            link = balise.get(dict_of_type[type])
+            filename = ""
+            base_link = link
+            if link is None:
+                continue
+            if link.startswith("//"):
+                link = f"{parsed_url.scheme}:{link}"
+                filename = link.split("?")[0].split("/")[-1]
+            elif link.startswith("/"):
+                link = f"{parsed_url.scheme}://{parsed_url.netloc}{link}"
+                filename = link.split("?")[0].split("/")[-1]
+            elif link.startswith("http"):
+                filename = link.split("?")[0].split("/")[-1]
+            else:
+                link = f"{parsed_url.scheme}://{parsed_url.netloc}/{link}"
+                filename = link.split("?")[0].split("/")[-1]
+            if link == url or filename == "" or not link.startswith("http") or link.startswith("mailto") or link.startswith(
+                    "tel"):
+                continue
+            filename = filename.split(".")[0]
+            if link in dict_of_url.keys():
+                directory, extension, filename = dict_of_url[link]
+            else:
+                directory, extension, filename = download(filename, parsed_url, link)
+                dict_of_url[link] = [directory, extension, filename]
+            str_balise = str(balise)
+            start_index = str_balise.find(f"{dict_of_type[type]}=") + len(f"{dict_of_type[type]}=") + 1
+            if parse_version == 1:
+                string_to_change = f"{directory}/{filename}{extension}"
+            else:
+                string_to_change = f"{{{{ url_for('static', filename='{directory}/{filename}{extension}') }}}}"
+            new_balise = str_balise[:start_index] + string_to_change + str_balise[str_balise.find('"', start_index):]
+            balise.replaceWith(BeautifulSoup(new_balise, 'html.parser'))
+    html = soup.prettify()
     with open(f"./downloads/{parsed_url.netloc}/index.html", "w") as f:
         f.write(html)
 
