@@ -5,6 +5,8 @@ import os
 import json
 import random
 import string
+import sys
+import cssutils
 
 with open("mimeType.json", "r") as f:
     mimetypes = json.load(f)
@@ -85,32 +87,22 @@ def remove_all(parsed_url):
     os.rmdir(f"./downloads/{parsed_url.netloc}")
 
 
-def main(url):
-    if not os.path.isdir("./downloads"):
-        os.mkdir("./downloads")
-    parsed_url = urlparse(url)
-    if not os.path.isdir(f"./downloads/{parsed_url.netloc}"):
-        os.mkdir(f"./downloads/{parsed_url.netloc}")
-    else:
-        print("Folder already exists")
-        rm_cond = input("yes or no (y or n) to remove folder : ")
-        if rm_cond.lower() == "y" or rm_cond.lower() == "yes":
-            remove_all(parsed_url)
-            os.mkdir(f"./downloads/{parsed_url.netloc}")
-        else:
-            print("Folder not removed")
-            exit()
-    parse_version = int(input("Choose between replacer\n"
-                              "1 classic\n"
-                              "2 flask\n"
-                              ": "))
-    if parse_version != 1 and parse_version != 2:
-        exit()
-    response = requests.get(url)
-    response.raise_for_status()
-    index = response.text
-    soup = BeautifulSoup(index, 'html.parser')
-    list_of_balise = getting_allBaliseWithPossibleLinks(soup)
+def passing_all_style_to_one_file(soup, parsed_url, parse_version):
+    styles = ""
+    for style in soup.find_all("style"):
+        styles += "\n" + style.get_text()
+        style.decompose()
+    soup.head.append(BeautifulSoup(f"<link></link>", "html.parser"))
+
+
+def minify_all(url, parse_version, parsed_url):
+    with open(f"./downloads/{parsed_url.netloc}/index.html", "r") as f:
+        html = f.read()
+    soup = BeautifulSoup(html, 'html.parser')
+    passing_all_style_to_one_file(soup, parsed_url, parse_version)
+
+
+def download_and_replace(list_of_balise, parse_version, parsed_url, url):
     dict_of_url = {}
     for type in list_of_balise.keys():
         for balise in list_of_balise[type]:
@@ -130,8 +122,9 @@ def main(url):
             else:
                 link = f"{parsed_url.scheme}://{parsed_url.netloc}/{link}"
                 filename = link.split("?")[0].split("/")[-1]
-            if link == url or filename == "" or not link.startswith("http") or link.startswith("mailto") or link.startswith(
-                    "tel"):
+            if link == url or filename == "" or not link.startswith("http") or link.startswith(
+                    "mailto") or link.startswith(
+                "tel"):
                 continue
             filename = filename.split(".")[0]
             if link in dict_of_url.keys():
@@ -147,11 +140,57 @@ def main(url):
                 string_to_change = f"{{{{ url_for('static', filename='{directory}/{filename}{extension}') }}}}"
             new_balise = str_balise[:start_index] + string_to_change + str_balise[str_balise.find('"', start_index):]
             balise.replaceWith(BeautifulSoup(new_balise, 'html.parser'))
-    html = soup.prettify()
-    with open(f"./downloads/{parsed_url.netloc}/index.html", "w") as f:
-        f.write(html)
+
+
+def parse_argv():
+    if "-u" in sys.argv[1:] and sys.argv.index("-u") + 1 < len(sys.argv):
+        url = sys.argv[sys.argv.index("-u") + 1]
+    else:
+        url = input("Enter site to copy :")
+    if not os.path.isdir("./downloads"):
+        os.mkdir("./downloads")
+    parsed_url = urlparse(url)
+    if not os.path.isdir(f"./downloads/{parsed_url.netloc}"):
+        os.mkdir(f"./downloads/{parsed_url.netloc}")
+    else:
+        pass
+        # if "-r" in sys.argv:
+        #     remove_all(parsed_url)
+        #     os.mkdir(f"./downloads/{parsed_url.netloc}")
+        # else:
+        #     print("Folder already exists")
+        #     rm_cond = input("yes or no (y or n) to remove folder : ")
+        #     if rm_cond.lower() == "y" or rm_cond.lower() == "yes":
+        #         remove_all(parsed_url)
+        #         os.mkdir(f"./downloads/{parsed_url.netloc}")
+        #     else:
+        #         print("Folder not removed")
+        #         exit()
+    if "--classic" in sys.argv:
+        parse_version = 1
+    elif "--flask" in sys.argv:
+        parse_version = 2
+    else:
+        parse_version = int(input("Choose between replacer\n1 classic\n2 flask\n: "))
+        if parse_version != 1 and parse_version != 2:
+            exit()
+    return url, parse_version, parsed_url, "--minify" in sys.argv
+
+
+def copy_site(url, parse_version, parsed_url, minify):
+    response = requests.get(url)
+    response.raise_for_status()
+    index = response.text
+    soup = BeautifulSoup(index, 'html.parser')
+    list_of_balise = getting_allBaliseWithPossibleLinks(soup)
+    if not minify:
+        download_and_replace(list_of_balise, parse_version, parsed_url, url)
+        html = soup.prettify()
+        with open(f"./downloads/{parsed_url.netloc}/index.html", "w") as f:
+            f.write(html)
+    if minify:
+        minify_all(url, parse_version, parsed_url)
 
 
 if __name__ == '__main__':
-    url = input("Enter site to copy :")
-    main(url)
+    copy_site(*parse_argv())
